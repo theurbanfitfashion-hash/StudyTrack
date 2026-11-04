@@ -5,7 +5,7 @@ import { BookOpen, Check, CheckCircle2, Clock3, Flame, GraduationCap, ListFilter
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
-type Lesson = { id: string; title: string; duration: number; videoId: string; position: number; completed: boolean; };
+type Lesson = { id: string; title: string; duration: number; videoId: string; position: number; completed: boolean; completedAt?: string | null; };
 type Course = { id: string; title: string; playlistId: string; thumbnail: string; lessons: Lesson[]; addedAt: number; };
 type Store = { courses: Course[]; goalHours: number; goalVideos: number; studiedMinutes: number; completedToday: number; day: string; };
 const localDay = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
@@ -34,7 +34,7 @@ export default function Home() {
   const loadWorkspace = useCallback(async (currentUser: User) => {
     setReady(false);
     const [courseResult, goalResult, sessionResult] = await Promise.all([
-      supabase.from("courses").select("id,title,playlist_id,thumbnail,added_at,lessons(id,video_id,title,duration_seconds,position,completed)").eq("user_id", currentUser.id).order("added_at", {ascending:false}),
+      supabase.from("courses").select("id,title,playlist_id,thumbnail,added_at,lessons(id,video_id,title,duration_seconds,position,completed,completed_at)").eq("user_id", currentUser.id).order("added_at", {ascending:false}),
       supabase.from("daily_goals").select("goal_hours,goal_videos").eq("user_id", currentUser.id).maybeSingle(),
       supabase.from("study_sessions").select("studied_minutes").eq("user_id", currentUser.id).eq("studied_on", localDay())
     ]);
@@ -44,9 +44,9 @@ export default function Home() {
     }
     const courses: Course[] = (courseResult.data || []).map((c: any) => ({
       id:c.id,title:c.title,playlistId:c.playlist_id,thumbnail:c.thumbnail || "",addedAt:new Date(c.added_at).getTime(),
-      lessons:(c.lessons || []).sort((a:any,b:any)=>a.position-b.position).map((v:any)=>({id:v.id,videoId:v.video_id,title:v.title,duration:v.duration_seconds,position:v.position,completed:v.completed}))
+      lessons:(c.lessons || []).sort((a:any,b:any)=>a.position-b.position).map((v:any)=>({id:v.id,videoId:v.video_id,title:v.title,duration:v.duration_seconds,position:v.position,completed:v.completed,completedAt:v.completed_at}))
     }));
-    const completedToday = (courseResult.data || []).flatMap((c:any)=>c.lessons || []).filter((v:any)=>v.completed && v.completed_at && String(v.completed_at).slice(0,10)===localDay()).length;
+    const completedToday = (courseResult.data || []).flatMap((c:any)=>c.lessons || []).filter((v:any)=>v.completed && v.completed_at && new Date(v.completed_at).toLocaleDateString("en-CA")===localDay()).length;
     setStore({courses,goalHours:Number(goalResult.data?.goal_hours ?? 2),goalVideos:goalResult.data?.goal_videos ?? 5,studiedMinutes:(sessionResult.data || []).reduce((n:any,s:any)=>n+s.studied_minutes,0),completedToday,day:localDay()});
     setActiveCourse(courses[0]?.id ?? null);
     setReady(true);
@@ -110,7 +110,7 @@ export default function Home() {
     const completedAt = next ? new Date().toISOString() : null;
     const {error} = await supabase.from("lessons").update({completed:next,completed_at:completedAt}).eq("id",lessonId);
     if (error) { setError(error.message); return; }
-    setStore(s => ({ ...s, completedToday: Math.max(0,s.completedToday + (next?1:(String((lesson as any).completedAt || "").slice(0,10)===localDay()?-1:0))), courses: s.courses.map(c => c.id !== courseId ? c : { ...c, lessons: c.lessons.map(v => v.id===lessonId ? {...v,completed:next} : v) }) }));
+    setStore(s => ({ ...s, completedToday: Math.max(0,s.completedToday + (next?1:(lesson.completedAt && new Date(lesson.completedAt).toLocaleDateString("en-CA")===localDay()?-1:0))), courses: s.courses.map(c => c.id !== courseId ? c : { ...c, lessons: c.lessons.map(v => v.id===lessonId ? {...v,completed:next,completedAt} : v) }) }));
   }
 
   async function addPlaylist(e: FormEvent) {
