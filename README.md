@@ -1,13 +1,13 @@
 # StudyTrack
 
-A personal study planner for YouTube learning playlists. Track courses, manually mark lessons complete, and set daily study-time and lesson targets.
+A personal study planner for YouTube learning playlists. Import public/unlisted playlists, manually mark lessons complete, sort and search lessons, and set daily study-time and lesson targets.
 
 ## MVP stack
 
 - Next.js App Router + TypeScript
 - Responsive client dashboard
-- Local persistence for the first prototype
-- YouTube playlist import API integration planned behind a server route
+- Browser-local persistence for this first prototype
+- Server-side YouTube Data API playlist importer (API key stays on the server)
 
 ## Run locally
 
@@ -18,6 +18,12 @@ npm run dev
 
 Open http://localhost:3000.
 
-## Deployment
+## Environment
 
-The source code lives on GitHub. GitHub Pages only hosts static sites and cannot run the server-side playlist API or a full authentication/database backend. For the complete account-based app, deploy the GitHub repository to Render (or another Node.js host) and connect a persistent database. The initial prototype can be published as a static preview, but its local data stays in that browser until cloud authentication and storage are connected.
+Copy `.env.example` to `.env.local` and set `YOUTUBE_API_KEY` from a Google Cloud project with YouTube Data API v3 enabled. Without the key, the dashboard still runs, but playlist importing is disabled.
+
+## Persistence and deployment
+
+This first milestone stores courses, completion status, and goals in the current browser using local storage. It does not yet provide sign-in or cross-device sync. Those require the next backend milestone: authentication plus a hosted database.
+
+The repository is the source of truth on GitHub. GitHub Pages cannot run this Next.js server route; deploy the full app from this GitHub repository to a Node.js host such as Render.
