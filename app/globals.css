@@ -78,3 +78,7 @@
 .lesson-row.is-complete .check-button{background:#8068df!important;border-color:#a18bf5!important;color:#fff!important;}
 .lesson-row .check-button:focus-visible{outline:2px solid #c4b5fd!important;outline-offset:3px!important;}
 .lesson-row .check-button:hover{border-color:#bbaaff!important;}
+
+.sort-box .sort-direction{appearance:none;-webkit-appearance:none;width:34px;height:34px;min-width:34px;padding:0;border:1px solid #393349;border-radius:9px;background:#201d2d;color:#c4b5fd;display:inline-grid;place-items:center;cursor:pointer;flex:0 0 auto;}
+.sort-box .sort-direction:hover{background:#302743;border-color:#9b7cf0;color:#fff;}
+.sort-box .sort-direction:focus-visible{outline:2px solid #c4b5fd;outline-offset:2px;}
