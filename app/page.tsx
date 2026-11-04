@@ -7,9 +7,12 @@ import type { User } from "@supabase/supabase-js";
 
 type Lesson = { id: string; title: string; duration: number; videoId: string; position: number; completed: boolean; completedAt?: string | null; };
 type Course = { id: string; title: string; playlistId: string; thumbnail: string; lessons: Lesson[]; addedAt: number; };
-type Store = { courses: Course[]; goalHours: number; goalVideos: number; studiedMinutes: number; completedToday: number; day: string; };
+type Session = { studied_minutes:number; studied_on:string; created_at:string; };
+type Store = { courses: Course[]; sessions: Session[]; studiedMinutes: number; completedToday: number; day: string; };
 const localDay = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
-const initial: Store = { courses: [], goalHours: 2, goalVideos: 5, studiedMinutes: 0, completedToday: 0, day: localDay() };
+const initial: Store = { courses: [], sessions: [], studiedMinutes: 0, completedToday: 0, day: localDay() };
+const dayKey = (date:Date) => date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0");
+const lastSevenDays = () => Array.from({length:7},(_,i)=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-(6-i));return dayKey(d);});
 const fmt = (seconds: number) => { const m = Math.floor(seconds / 60); const h = Math.floor(m / 60); return h ? `${h}h ${m % 60}m` : `${m}m`; };
 const supabase = createClient();
 
@@ -33,6 +36,7 @@ export default function Home() {
   const [studyInput, setStudyInput] = useState("30");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [refreshingDurations, setRefreshingDurations] = useState(false);
+  const [activeTab,setActiveTab]=useState<"learning"|"progress">("learning");
 
   const loadWorkspace = useCallback(async (currentUser: User) => {
     setReady(false);
@@ -44,13 +48,13 @@ export default function Home() {
       setError(profileWrite.error?.message || goalWrite.error?.message || "Could not initialize your account.");
       setReady(true); return;
     }
-    const [courseResult, goalResult, sessionResult] = await Promise.all([
+    const historyStart = lastSevenDays()[0];
+    const [courseResult, sessionResult] = await Promise.all([
       supabase.from("courses").select("id,title,playlist_id,thumbnail,added_at,lessons(id,video_id,title,duration_seconds,position,completed,completed_at)").eq("user_id", currentUser.id).order("added_at", {ascending:false}),
-      supabase.from("daily_goals").select("goal_hours,goal_videos").eq("user_id", currentUser.id).maybeSingle(),
-      supabase.from("study_sessions").select("studied_minutes").eq("user_id", currentUser.id).eq("studied_on", localDay())
+      supabase.from("study_sessions").select("studied_minutes,studied_on,created_at").eq("user_id", currentUser.id).gte("studied_on",historyStart).lte("studied_on",localDay()).order("created_at",{ascending:false})
     ]);
-    if (courseResult.error || goalResult.error || sessionResult.error) {
-      setError(courseResult.error?.message || goalResult.error?.message || sessionResult.error?.message || "Could not load your study data.");
+    if (courseResult.error || sessionResult.error) {
+      setError(courseResult.error?.message || sessionResult.error?.message || "Could not load your study data.");
       setReady(true); return;
     }
     const courses: Course[] = (courseResult.data || []).map((c: any) => ({
@@ -58,7 +62,7 @@ export default function Home() {
       lessons:(c.lessons || []).sort((a:any,b:any)=>a.position-b.position).map((v:any)=>({id:v.id,videoId:v.video_id,title:v.title,duration:v.duration_seconds,position:v.position,completed:v.completed,completedAt:v.completed_at}))
     }));
     const completedToday = (courseResult.data || []).flatMap((c:any)=>c.lessons || []).filter((v:any)=>v.completed && v.completed_at && new Date(v.completed_at).toLocaleDateString("en-CA")===localDay()).length;
-    setStore({courses,goalHours:Number(goalResult.data?.goal_hours ?? 2),goalVideos:goalResult.data?.goal_videos ?? 5,studiedMinutes:(sessionResult.data || []).reduce((n:any,s:any)=>n+s.studied_minutes,0),completedToday,day:localDay()});
+    setStore({courses,sessions:sessionResult.data||[],studiedMinutes:(sessionResult.data||[]).filter((s:any)=>s.studied_on===localDay()).reduce((n:number,s:any)=>n+s.studied_minutes,0),completedToday,day:localDay()});
     setActiveCourse(courses[0]?.id ?? null);
     setReady(true);
   }, []);
@@ -111,8 +115,8 @@ export default function Home() {
     if (sort === "pending") items = [...items].sort((a,b) => Number(a.completed)-Number(b.completed));
     return items;
   }, [selected, search, sort]);
-  const timePct = Math.min(100, Math.round(store.studiedMinutes / Math.max(1, store.goalHours * 60) * 100));
-  const videoPct = Math.min(100, Math.round(store.completedToday / Math.max(1, store.goalVideos) * 100));
+  const dailyHistory = lastSevenDays().map(day=>({day,lessons:allLessons.filter(v=>v.completed&&v.completedAt&&dayKey(new Date(v.completedAt))===day),minutes:store.sessions.filter(s=>s.studied_on===day).reduce((n,s)=>n+s.studied_minutes,0)}));
+  const todayHistory = allLessons.filter(v=>v.completed&&v.completedAt&&dayKey(new Date(v.completedAt))===localDay()).sort((a,b)=>new Date(b.completedAt!).getTime()-new Date(a.completedAt!).getTime());
 
   async function updateCourse(courseId: string, lessonId: string) {
     const lesson = store.courses.find(c=>c.id===courseId)?.lessons.find(v=>v.id===lessonId);
@@ -169,14 +173,9 @@ export default function Home() {
     const mins = Math.max(1,Math.min(600,Number(studyInput)||0));
     const {error} = await supabase.from("study_sessions").insert({user_id:user!.id,studied_minutes:mins,studied_on:localDay()});
     if (error) {setError(error.message);return;}
-    setStore(s=>({...s,studiedMinutes:s.studiedMinutes+mins})); setStudyInput("30");
+    setStore(s=>({...s,studiedMinutes:s.studiedMinutes+mins,sessions:[{studied_minutes:mins,studied_on:localDay(),created_at:new Date().toISOString()},...s.sessions]})); setStudyInput("30");
   }
 
-  async function saveGoals(goalHours:number,goalVideos:number) {
-    setStore(s=>({...s,goalHours,goalVideos}));
-    const {error} = await supabase.from("daily_goals").upsert({user_id:user!.id,goal_hours:goalHours,goal_videos:goalVideos,updated_at:new Date().toISOString()});
-    if(error) setError(error.message);
-  }
   async function deleteCourse(courseId:string) {
     const {error}=await supabase.from("courses").delete().eq("id",courseId);
     if(error){setError(error.message);return;}
@@ -207,8 +206,8 @@ export default function Home() {
       <aside className="sidebar">
         <div className="sidebar-brand-row"><a className="brand" href="#"><span className="brand-mark"><GraduationCap size={22}/></span><span>studytrack</span></a><button className="sidebar-toggle" type="button" onClick={()=>setSidebarCollapsed(v=>!v)} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>{sidebarCollapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button></div>
         <div className="nav-label">WORKSPACE</div>
-        <a className="nav-item active"><BookOpen size={18}/> My learning</a>
-        <a className="nav-item" href="#daily-goals"><Target size={18}/> Daily goals</a>
+        <button className={`nav-item ${activeTab==="learning"?"active":""}`} onClick={()=>setActiveTab("learning")}><BookOpen size={18}/> My learning</button>
+        <button className={`nav-item ${activeTab==="progress"?"active":""}`} onClick={()=>setActiveTab("progress")}><Target size={18}/> Daily progress</button>
         <div className="sidebar-bottom"><div className="mini-avatar">{(user.email||"S")[0].toUpperCase()}</div><div className="account-details"><strong>{user.email}</strong><small>Synced account</small></div><button className="signout-button" onClick={signOut} title="Sign out"><LogOut size={17}/></button></div>
       </aside>
       <section className="main-area">
@@ -217,17 +216,16 @@ export default function Home() {
           <article className="stat-card"><div className="stat-icon violet"><BookOpen size={19}/></div><span>Courses</span><strong>{store.courses.length}</strong><small>Playlists in your library</small></article>
           <article className="stat-card"><div className="stat-icon blue"><CheckCircle2 size={19}/></div><span>Lessons completed</span><strong>{completed}<small className="muted-total"> / {total}</small></strong><small>Across all courses</small></article>
           <article className="stat-card"><div className="stat-icon orange"><Clock3 size={19}/></div><span>Study time today</span><strong>{fmt(store.studiedMinutes*60)}</strong><small>Keep your momentum</small></article>
-          <article className="stat-card"><div className="stat-icon pink"><Flame size={19}/></div><span>Today's lessons</span><strong>{store.completedToday}<small className="muted-total"> / {store.goalVideos}</small></strong><small>Daily video target</small></article>
+          <article className="stat-card"><div className="stat-icon pink"><Flame size={19}/></div><span>Classes today</span><strong>{store.completedToday}</strong><small>Completed lessons</small></article>
         </section>
-        <section className="goals-section" id="daily-goals">
-          <div className="section-heading"><div><span className="eyebrow">STAY CONSISTENT</span><h2>Today's targets</h2></div><span className="goal-date">Daily goals</span></div>
-          <div className="goals-grid">
-            <article className="goal-card"><div className="goal-top"><div className="goal-icon"><Clock3 size={18}/></div><span>Study time</span><strong>{timePct}%</strong></div><div className="progress-track"><div className="progress-fill purple-fill" style={{width:`${timePct}%`}}/></div><div className="goal-bottom"><b>{fmt(store.studiedMinutes*60)} <i>/ {store.goalHours}h</i></b><label>Daily target <input aria-label="Daily study hours target" type="number" min="1" max="24" step="0.5" value={store.goalHours} onChange={e=>void saveGoals(Math.max(1,Math.min(24,Number(e.target.value)||1)),store.goalVideos)}/></label></div></article>
-            <article className="goal-card"><div className="goal-top"><div className="goal-icon blue-goal"><CheckCircle2 size={18}/></div><span>Lessons</span><strong>{videoPct}%</strong></div><div className="progress-track"><div className="progress-fill blue-fill" style={{width:`${videoPct}%`}}/></div><div className="goal-bottom"><b>{store.completedToday} <i>/ {store.goalVideos} videos</i></b><label>Daily target <input aria-label="Daily video target" type="number" min="1" max="500" value={store.goalVideos} onChange={e=>void saveGoals(store.goalHours,Math.max(1,Math.min(500,Number(e.target.value)||1)))}/></label></div></article>
-          </div>
-          <div className="log-time"><span><Clock3 size={16}/> Log a study session</span><input aria-label="Minutes studied" type="number" min="1" max="600" value={studyInput} onChange={e=>setStudyInput(e.target.value)}/><span className="mins">minutes</span><button onClick={()=>void addStudyTime()}>Add time</button></div>
-        </section>
-        <section className="courses-section">
+        {activeTab==="progress"?<section className="progress-page">
+          <div className="section-heading"><div><span className="eyebrow">YOUR ACTIVITY</span><h2>Daily progress</h2></div><span className="goal-date">Last 7 days</span></div>
+          <div className="progress-summary"><article className="progress-summary-card"><span>Total classes today</span><strong>{todayHistory.length}</strong></article><article className="progress-summary-card"><span>Total study time today</span><strong>{fmt(store.studiedMinutes*60)}</strong></article><article className="progress-summary-card"><span>Classes in 7 days</span><strong>{dailyHistory.reduce((n,d)=>n+d.lessons.length,0)}</strong></article><article className="progress-summary-card"><span>Study time in 7 days</span><strong>{fmt(dailyHistory.reduce((n,d)=>n+d.minutes,0)*60)}</strong></article></div>
+          <div className="history-card"><div className="section-heading"><div><span className="eyebrow">WEEKLY OVERVIEW</span><h2>Last 7 days</h2></div></div><div className="history-days">{dailyHistory.slice().reverse().map(d=><div className="history-day" key={d.day}><div className="history-day-date"><strong>{d.day===localDay()?"Today":new Date(d.day+"T12:00:00").toLocaleDateString(undefined,{weekday:"short"})}</strong><small>{new Date(d.day+"T12:00:00").toLocaleDateString(undefined,{month:"short",day:"numeric"})}</small></div><div className="history-bar"><div style={{width:(Math.min(100,d.lessons.length/Math.max(1,...dailyHistory.map(x=>x.lessons.length))*100))+"%"}}/></div><strong className="history-count">{d.lessons.length} classes</strong><span className="history-time">{fmt(d.minutes*60)}</span></div>)}</div></div>
+          <div className="history-card"><div className="section-heading"><div><span className="eyebrow">COMPLETION LOG</span><h2>Today&#39;s completed classes</h2></div><span className="goal-date">{todayHistory.length} completed</span></div>{todayHistory.length?todayHistory.map(v=><div className="completed-history-row" key={v.id}><span className="history-check"><Check size={14}/></span><div><strong>{v.title}</strong><small>{store.courses.find(c=>c.lessons.some(l=>l.id===v.id))?.title||"Course"}</small></div><time>{new Date(v.completedAt!).toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"})}</time></div>):<p className="empty-history">No classes completed today yet. Mark a lesson complete in My learning and it will appear here.</p>}</div>
+          <div className="history-card"><div className="section-heading"><div><span className="eyebrow">STUDY TIME</span><h2>Log a study session</h2></div></div><div className="log-time"><span><Clock3 size={16}/> Record time studied</span><input aria-label="Minutes studied" type="number" min="1" max="600" value={studyInput} onChange={e=>setStudyInput(e.target.value)}/><span className="mins">minutes</span><button onClick={()=>void addStudyTime()}>Add time</button></div></div>
+        </section>:<section className="courses-section">
+
           <div className="section-heading"><div><span className="eyebrow">BUILD YOUR ROUTINE</span><h2>My courses <span className="count-pill">{store.courses.length}</span></h2></div></div>
           <form className="add-form" onSubmit={addPlaylist}><div className="youtube-symbol"><Youtube size={21}/></div><input value={playlistUrl} onChange={e=>setPlaylistUrl(e.target.value)} placeholder="Paste a YouTube playlist link to get started..." aria-label="YouTube playlist URL" required/><button disabled={loading||!playlistUrl.trim()}>{loading?<LoaderCircle className="spin" size={17}/>:<Plus size={17}/>}<span>{loading?"Importing":"Add playlist"}</span></button></form>
           {error&&<div className="error-msg">{error}</div>}
@@ -239,7 +237,7 @@ export default function Home() {
               {selected?<><div className="lesson-head"><div><h3>{selected.title}</h3><p>{selected.lessons.filter(v=>v.completed).length} of {selected.lessons.length} lessons completed</p></div><div className="lesson-head-actions"><button className="refresh-durations" type="button" onClick={()=>void refreshDurations()} disabled={refreshingDurations} title="Refresh saved video durations"><RefreshCw size={15} className={refreshingDurations?"spin":""}/><span>{refreshingDurations?"Refreshing":"Refresh times"}</span></button><button className="delete-course" title="Remove course" onClick={()=>void deleteCourse(selected.id)}><Trash2 size={17}/></button></div></div><div className="lesson-toolbar"><div className="search-box"><Search size={16}/><input placeholder="Find a lesson..." value={search} onChange={e=>setSearch(e.target.value)}/></div><div className="sort-box"><ListFilter size={15}/><select aria-label="Sort lessons" value={sort} onChange={e=>setSort(e.target.value)}><option value="original">Playlist order</option><option value="pending">Incomplete first</option><option value="short">Shortest first</option><option value="long">Longest first</option></select><ArrowUpDown size={13}/></div></div><div className="lesson-list">{filteredLessons.map((v,i)=><div className={`lesson-row ${v.completed?"is-complete":""}`} key={v.id}><button className="check-button" aria-label={v.completed?"Mark incomplete":"Mark complete"} onClick={()=>void updateCourse(selected.id,v.id)}>{v.completed?<Check size={15}/>:<Circle size={17}/>}</button><span className="lesson-number">{String(v.position||i+1).padStart(2,"0")}</span><div className="lesson-title"><strong>{v.title}</strong><small>{v.completed?"Completed":"Not completed"}</small></div><span className="lesson-duration">{fmt(v.duration)}</span><a className="play-link" href={`https://www.youtube.com/watch?v=${v.videoId}`} target="_blank" rel="noreferrer" title="Watch on YouTube"><Play size={15}/></a></div>)}</div>{filteredLessons.length===0&&<div className="no-results">No lessons match your search.</div>}</>:<div className="select-course"><BookOpen size={28}/><h3>Select a course</h3><p>Choose a playlist to see and manage its lessons.</p></div>}
             </div>
           </div>
-        </section>
+        </section>}
         <footer>Made for focused learning <span>·</span> StudyTrack MVP</footer>
       </section>
     </main>
