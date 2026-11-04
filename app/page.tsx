@@ -34,7 +34,6 @@ export default function Home() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [sortPreferences, setSortPreferences] = useState<Record<string, SortPreference>>({});
-  const selectedSort = selected ? (sortPreferences[selected.id] ?? defaultSort) : defaultSort;
   const [activeCourse, setActiveCourse] = useState<string | null>(null);
   const [studyInput, setStudyInput] = useState("30");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -136,6 +135,7 @@ export default function Home() {
   const total = allLessons.length;
   const completed = allLessons.filter(v => v.completed).length;
   const selected = store.courses.find(c => c.id === activeCourse) ?? store.courses[0] ?? null;
+  const selectedSort = selected ? (sortPreferences[selected.id] ?? defaultSort) : defaultSort;
   const filteredLessons = useMemo(() => {
     if (!selected) return [];
     let items = selected.lessons.filter(v => v.title.toLowerCase().includes(search.toLowerCase()));
