@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { BookOpen, Check, CheckCircle2, Clock3, Flame, GraduationCap, ListFilter, Plus, Search, Target, Trash2, Youtube, Play, Circle, CalendarDays, ArrowUpDown, LoaderCircle, LogOut, Mail, Eye, EyeOff } from "lucide-react";
+import { BookOpen, Check, CheckCircle2, Clock3, Flame, GraduationCap, ListFilter, Plus, Search, Target, Trash2, Youtube, Play, Circle, CalendarDays, ArrowUpDown, LoaderCircle, LogOut, Mail, Eye, EyeOff, PanelLeftClose, PanelLeftOpen, RefreshCw } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
@@ -31,6 +31,8 @@ export default function Home() {
   const [sort, setSort] = useState("original");
   const [activeCourse, setActiveCourse] = useState<string | null>(null);
   const [studyInput, setStudyInput] = useState("30");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [refreshingDurations, setRefreshingDurations] = useState(false);
 
   const loadWorkspace = useCallback(async (currentUser: User) => {
     setReady(false);
@@ -141,6 +143,28 @@ export default function Home() {
     finally { setLoading(false); }
   }
 
+  async function refreshDurations() {
+    if (!selected) return;
+    setRefreshingDurations(true); setError("");
+    try {
+      const response = await fetch("/api/youtube/playlist", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:`https://www.youtube.com/playlist?list=${selected.playlistId}`})});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not refresh video durations.");
+      const updates = new Map<string,number>(data.lessons.map((v:any)=>[v.videoId,Number(v.duration)||0]));
+      const changed = selected.lessons.map(v=>({...v,duration:updates.has(v.videoId)?updates.get(v.videoId)!:v.duration}));
+      const failed = changed.filter(v=>!v.duration).length;
+      for (const v of changed) {
+        if (v.duration !== selected.lessons.find(x=>x.id===v.id)?.duration) {
+          const {error:dbError}=await supabase.from("lessons").update({duration_seconds:v.duration}).eq("id",v.id);
+          if(dbError) throw dbError;
+        }
+      }
+      setStore(s=>({...s,courses:s.courses.map(c=>c.id===selected.id?{...c,lessons:changed}:c)}));
+      if (failed) setError(`Durations refreshed. ${failed} videos did not return a duration (possibly private or unavailable).`);
+    } catch(e) { setError(e instanceof Error?e.message:"Could not refresh video durations."); }
+    finally { setRefreshingDurations(false); }
+  }
+
   async function addStudyTime() {
     const mins = Math.max(1,Math.min(600,Number(studyInput)||0));
     const {error} = await supabase.from("study_sessions").insert({user_id:user!.id,studied_minutes:mins,studied_on:localDay()});
@@ -212,7 +236,7 @@ export default function Home() {
               {store.courses.length===0?<div className="empty-state"><div className="empty-icon"><Youtube size={27}/></div><h3>Your learning library starts here</h3><p>Add a public YouTube playlist and its lessons will appear here, ready to organize and track.</p><div className="empty-tip">✦ Your progress syncs to your account across devices.</div></div>:store.courses.map(c=><button key={c.id} className={`course-row ${selected?.id===c.id?"selected":""}`} onClick={()=>{setActiveCourse(c.id);setSearch("");}}><img src={c.thumbnail||"https://placehold.co/96x64/25243a/ffffff?text=Course"} alt=""/><div className="course-info"><strong>{c.title}</strong><small>{c.lessons.length} lessons · {fmt(c.lessons.reduce((a,v)=>a+v.duration,0))}</small><div className="tiny-track"><div style={{width:`${courseProgress(c)}%`}}/></div></div><b className="course-percent">{courseProgress(c)}%</b></button>)}
             </div>
             <div className="lesson-panel">
-              {selected?<><div className="lesson-head"><div><h3>{selected.title}</h3><p>{selected.lessons.filter(v=>v.completed).length} of {selected.lessons.length} lessons completed</p></div><button className="delete-course" title="Remove course" onClick={()=>void deleteCourse(selected.id)}><Trash2 size={17}/></button></div><div className="lesson-toolbar"><div className="search-box"><Search size={16}/><input placeholder="Find a lesson..." value={search} onChange={e=>setSearch(e.target.value)}/></div><div className="sort-box"><ListFilter size={15}/><select aria-label="Sort lessons" value={sort} onChange={e=>setSort(e.target.value)}><option value="original">Playlist order</option><option value="pending">Incomplete first</option><option value="short">Shortest first</option><option value="long">Longest first</option></select><ArrowUpDown size={13}/></div></div><div className="lesson-list">{filteredLessons.map((v,i)=><div className={`lesson-row ${v.completed?"is-complete":""}`} key={v.id}><button className="check-button" aria-label={v.completed?"Mark incomplete":"Mark complete"} onClick={()=>void updateCourse(selected.id,v.id)}>{v.completed?<Check size={15}/>:<Circle size={17}/>}</button><span className="lesson-number">{String(v.position||i+1).padStart(2,"0")}</span><div className="lesson-title"><strong>{v.title}</strong><small>{v.completed?"Completed":"Not completed"}</small></div><span className="lesson-duration">{fmt(v.duration)}</span><a className="play-link" href={`https://www.youtube.com/watch?v=${v.videoId}`} target="_blank" rel="noreferrer" title="Watch on YouTube"><Play size={15}/></a></div>)}</div>{filteredLessons.length===0&&<div className="no-results">No lessons match your search.</div>}</>:<div className="select-course"><BookOpen size={28}/><h3>Select a course</h3><p>Choose a playlist to see and manage its lessons.</p></div>}
+              {selected?<><div className="lesson-head"><div><h3>{selected.title}</h3><p>{selected.lessons.filter(v=>v.completed).length} of {selected.lessons.length} lessons completed</p></div><div className="lesson-head-actions"><button className="refresh-durations" type="button" onClick={()=>void refreshDurations()} disabled={refreshingDurations} title="Refresh saved video durations"><RefreshCw size={15} className={refreshingDurations?"spin":""}/><span>{refreshingDurations?"Refreshing":"Refresh times"}</span></button><button className="delete-course" title="Remove course" onClick={()=>void deleteCourse(selected.id)}><Trash2 size={17}/></button></div></div><div className="lesson-toolbar"><div className="search-box"><Search size={16}/><input placeholder="Find a lesson..." value={search} onChange={e=>setSearch(e.target.value)}/></div><div className="sort-box"><ListFilter size={15}/><select aria-label="Sort lessons" value={sort} onChange={e=>setSort(e.target.value)}><option value="original">Playlist order</option><option value="pending">Incomplete first</option><option value="short">Shortest first</option><option value="long">Longest first</option></select><ArrowUpDown size={13}/></div></div><div className="lesson-list">{filteredLessons.map((v,i)=><div className={`lesson-row ${v.completed?"is-complete":""}`} key={v.id}><button className="check-button" aria-label={v.completed?"Mark incomplete":"Mark complete"} onClick={()=>void updateCourse(selected.id,v.id)}>{v.completed?<Check size={15}/>:<Circle size={17}/>}</button><span className="lesson-number">{String(v.position||i+1).padStart(2,"0")}</span><div className="lesson-title"><strong>{v.title}</strong><small>{v.completed?"Completed":"Not completed"}</small></div><span className="lesson-duration">{fmt(v.duration)}</span><a className="play-link" href={`https://www.youtube.com/watch?v=${v.videoId}`} target="_blank" rel="noreferrer" title="Watch on YouTube"><Play size={15}/></a></div>)}</div>{filteredLessons.length===0&&<div className="no-results">No lessons match your search.</div>}</>:<div className="select-course"><BookOpen size={28}/><h3>Select a course</h3><p>Choose a playlist to see and manage its lessons.</p></div>}
             </div>
           </div>
         </section>
