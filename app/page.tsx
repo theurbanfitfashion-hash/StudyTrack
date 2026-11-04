@@ -61,8 +61,8 @@ export default function Home() {
       id:c.id,title:c.title,playlistId:c.playlist_id,thumbnail:c.thumbnail || "",addedAt:new Date(c.added_at).getTime(),
       lessons:(c.lessons || []).sort((a:any,b:any)=>a.position-b.position).map((v:any)=>({id:v.id,videoId:v.video_id,title:v.title,duration:v.duration_seconds,position:v.position,completed:v.completed,completedAt:v.completed_at}))
     }));
-    const completedToday = (courseResult.data || []).flatMap((c:any)=>c.lessons || []).filter((v:any)=>v.completed && v.completed_at && new Date(v.completed_at).toLocaleDateString("en-CA")===localDay()).length;
-    setStore({courses,sessions:sessionResult.data||[],studiedMinutes:(sessionResult.data||[]).filter((s:any)=>dayKey(new Date(s.created_at))===localDay()).reduce((n:number,s:any)=>n+s.studied_minutes,0),completedToday,day:localDay()});
+    const completedToday = (courseResult.data || []).flatMap((c:any)=>c.lessons || []).filter((v:any)=>v.completed && v.completed_at && dayKey(new Date(v.completed_at))===localDay()).length;
+    setStore({courses,sessions:sessionResult.data||[],studiedMinutes:(sessionResult.data||[]).filter((s:any)=>s.studied_on===localDay()).reduce((n:number,s:any)=>n+s.studied_minutes,0),completedToday,day:localDay()});
     setActiveCourse(courses[0]?.id ?? null);
     setReady(true);
   }, []);
@@ -84,6 +84,28 @@ export default function Home() {
     });
     return () => { alive=false; subscription.unsubscribe(); };
   }, [loadWorkspace]);
+
+  useEffect(() => {
+    if (!user || !ready) return;
+    let queued = false;
+    const sync = () => {
+      if (queued) return;
+      queued = true;
+      void loadWorkspace(user).finally(() => { queued = false; });
+    };
+    const channel = supabase.channel("studytrack-live-sync")
+      .on("postgres_changes",{event:"*",schema:"public",table:"lessons"},sync)
+      .on("postgres_changes",{event:"*",schema:"public",table:"study_sessions",filter:`user_id=eq.${user.id}`},sync)
+      .subscribe();
+    const onFocus = () => { if (document.visibilityState === "visible") sync(); };
+    window.addEventListener("focus",onFocus);
+    document.addEventListener("visibilitychange",onFocus);
+    return () => {
+      window.removeEventListener("focus",onFocus);
+      document.removeEventListener("visibilitychange",onFocus);
+      void supabase.removeChannel(channel);
+    };
+  },[user,ready,loadWorkspace]);
 
   async function handleAuth(e: FormEvent) {
     e.preventDefault(); setAuthBusy(true); setAuthMessage("");
@@ -115,7 +137,7 @@ export default function Home() {
     if (sort === "pending") items = [...items].sort((a,b) => Number(a.completed)-Number(b.completed));
     return items;
   }, [selected, search, sort]);
-  const dailyHistory = lastSevenDays().map(day=>({day,lessons:allLessons.filter(v=>v.completed&&v.completedAt&&dayKey(new Date(v.completedAt))===day),minutes:store.sessions.filter(s=>dayKey(new Date(s.created_at))===day).reduce((n,s)=>n+s.studied_minutes,0)}));
+  const dailyHistory = lastSevenDays().map(day=>({day,lessons:allLessons.filter(v=>v.completed&&v.completedAt&&dayKey(new Date(v.completedAt))===day),minutes:store.sessions.filter(s=>s.studied_on===day).reduce((n,s)=>n+s.studied_minutes,0)}));
   const todayHistory = allLessons.filter(v=>v.completed&&v.completedAt&&dayKey(new Date(v.completedAt))===localDay()).sort((a,b)=>new Date(b.completedAt!).getTime()-new Date(a.completedAt!).getTime());
 
   async function updateCourse(courseId: string, lessonId: string) {
@@ -226,7 +248,8 @@ export default function Home() {
         <div className="sidebar-brand-row"><a className="brand" href="#"><span className="brand-mark"><GraduationCap size={22}/></span><span>studytrack</span></a><button className="sidebar-toggle" type="button" onClick={()=>setSidebarCollapsed(v=>!v)} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>{sidebarCollapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button></div>
         <div className="nav-label">WORKSPACE</div>
         <button className={`nav-item ${activeTab==="learning"?"active":""}`} onClick={()=>setActiveTab("learning")}><BookOpen size={18}/> My learning</button>
-        <button className={`nav-item ${activeTab==="progress"?"active":""}`} onClick={()=>setActiveTab("progress")}><Target size={18}/> Daily progress</button>\n        <button className={`nav-item ${activeTab==="settings"?"active":""}`} onClick={()=>{setActiveTab("settings");setError("");}}><Settings size={18}/> Settings</button>
+        <button className={`nav-item ${activeTab==="progress"?"active":""}`} onClick={()=>setActiveTab("progress")}><Target size={18}/> Daily progress</button>
+        <button className={`nav-item ${activeTab==="settings"?"active":""}`} onClick={()=>{setActiveTab("settings");setError("");}}><Settings size={18}/> Settings</button>
         <div className="sidebar-bottom"><div className="mini-avatar">{(user.email||"S")[0].toUpperCase()}</div><div className="account-details"><strong>{user.email}</strong><small>Synced account</small></div><button className="signout-button" onClick={signOut} title="Sign out"><LogOut size={17}/></button></div>
       </aside>
       <section className="main-area">
@@ -235,9 +258,14 @@ export default function Home() {
           <article className="stat-card"><div className="stat-icon violet"><BookOpen size={19}/></div><span>Courses</span><strong>{store.courses.length}</strong><small>Playlists in your library</small></article>
           <article className="stat-card"><div className="stat-icon blue"><CheckCircle2 size={19}/></div><span>Lessons completed</span><strong>{completed}<small className="muted-total"> / {total}</small></strong><small>Across all courses</small></article>
           <article className="stat-card"><div className="stat-icon orange"><Clock3 size={19}/></div><span>Study time today</span><strong>{fmt(store.studiedMinutes*60)}</strong><small>Keep your momentum</small></article>
-          <article className="stat-card"><div className="stat-icon pink"><Flame size={19}/></div><span>Classes today</span><strong>{store.completedToday}</strong><small>Completed lessons</small></article>
+          <article className="stat-card"><div className="stat-icon pink"><Flame size={19}/></div><span>Classes today</span><strong>{todayHistory.length}</strong><small>Completed lessons</small></article>
         </section>
-        {activeTab==="settings"?<section className="settings-page">\n          <div className="section-heading"><div><span className="eyebrow">PREFERENCES & DATA</span><h2>Settings</h2></div></div>\n          <div className="settings-card"><div><h3>Study-time logs</h3><p>Remove all manually recorded study sessions. Your courses and lesson completion status will stay unchanged.</p></div><div className="settings-action"><strong>{store.sessions.length} recent log entries</strong><button className="danger-button" onClick={()=>void resetStudyLogs()}>Reset study-time logs</button></div></div>\n          <div className="settings-card"><div><h3>Lesson completion history</h3><p>Mark every lesson in every course as incomplete and clear its completion timestamp. Your playlists and video durations will remain.</p></div><div className="settings-action"><strong>{completed} completed lessons</strong><button className="danger-button" onClick={()=>void resetCompletionHistory()}>Reset lesson history</button></div></div>\n          {error&&<div className="error-msg">{error}</div>}\n        </section>:activeTab==="progress"?<section className="progress-page">
+        {activeTab==="settings"?<section className="settings-page">
+          <div className="section-heading"><div><span className="eyebrow">PREFERENCES & DATA</span><h2>Settings</h2></div></div>
+          <div className="settings-card"><div><h3>Study-time logs</h3><p>Remove all manually recorded study sessions. Your courses and lesson completion status will stay unchanged.</p></div><div className="settings-action"><strong>{store.sessions.length} recent log entries</strong><button className="danger-button" onClick={()=>void resetStudyLogs()}>Reset study-time logs</button></div></div>
+          <div className="settings-card"><div><h3>Lesson completion history</h3><p>Mark every lesson in every course as incomplete and clear its completion timestamp. Your playlists and video durations will remain.</p></div><div className="settings-action"><strong>{completed} completed lessons</strong><button className="danger-button" onClick={()=>void resetCompletionHistory()}>Reset lesson history</button></div></div>
+          {error&&<div className="error-msg">{error}</div>}
+        </section>:activeTab==="progress"?<section className="progress-page">
           <div className="section-heading"><div><span className="eyebrow">YOUR ACTIVITY</span><h2>Daily progress</h2></div><span className="goal-date">Last 7 days</span></div>
           <div className="progress-summary"><article className="progress-summary-card"><span>Total classes today</span><strong>{todayHistory.length}</strong></article><article className="progress-summary-card"><span>Total study time today</span><strong>{fmt(store.studiedMinutes*60)}</strong></article><article className="progress-summary-card"><span>Classes in 7 days</span><strong>{dailyHistory.reduce((n,d)=>n+d.lessons.length,0)}</strong></article><article className="progress-summary-card"><span>Study time in 7 days</span><strong>{fmt(dailyHistory.reduce((n,d)=>n+d.minutes,0)*60)}</strong></article></div>
           <div className="history-card"><div className="section-heading"><div><span className="eyebrow">WEEKLY OVERVIEW</span><h2>Last 7 days</h2></div></div><div className="history-days">{dailyHistory.slice().reverse().map(d=><div className="history-day" key={d.day}><div className="history-day-date"><strong>{d.day===localDay()?"Today":new Date(d.day+"T12:00:00").toLocaleDateString(undefined,{weekday:"short"})}</strong><small>{new Date(d.day+"T12:00:00").toLocaleDateString(undefined,{month:"short",day:"numeric"})}</small></div><div className="history-bar"><div style={{width:(Math.min(100,d.lessons.length/Math.max(1,...dailyHistory.map(x=>x.lessons.length))*100))+"%"}}/></div><strong className="history-count">{d.lessons.length} classes</strong><span className="history-time">{fmt(d.minutes*60)}</span></div>)}</div></div>
