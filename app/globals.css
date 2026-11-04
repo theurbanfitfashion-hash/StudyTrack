@@ -70,3 +70,11 @@
 .settings-action{display:flex;flex-direction:column;align-items:flex-end;gap:10px;flex-shrink:0}.settings-action strong{font-size:10px;color:var(--muted)}
 .danger-button{border:1px solid rgba(239,91,113,.35);background:rgba(239,91,113,.10);color:#ff8c9c;border-radius:8px;padding:10px 13px;font:600 11px inherit;cursor:pointer}.danger-button:hover{background:rgba(239,91,113,.18)}
 @media(max-width:650px){.settings-card{align-items:stretch;flex-direction:column;padding:16px}.settings-action{align-items:flex-start}}
+
+
+/* Consistent lesson completion toggle across browsers */
+.lesson-row .check-button{appearance:none!important;-webkit-appearance:none!important;box-sizing:border-box!important;width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;padding:0!important;margin:0!important;border:1.5px solid #625b80!important;border-radius:8px!important;background:#171925!important;color:#bbaaff!important;display:inline-grid!important;place-items:center!important;line-height:1!important;box-shadow:none!important;vertical-align:middle!important;cursor:pointer!important;}
+.lesson-row .check-button svg{display:block!important;width:15px!important;height:15px!important;pointer-events:none!important;}
+.lesson-row.is-complete .check-button{background:#8068df!important;border-color:#a18bf5!important;color:#fff!important;}
+.lesson-row .check-button:focus-visible{outline:2px solid #c4b5fd!important;outline-offset:3px!important;}
+.lesson-row .check-button:hover{border-color:#bbaaff!important;}
