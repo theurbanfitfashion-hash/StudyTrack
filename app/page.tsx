@@ -22,7 +22,6 @@ export default function Home() {
   const [showPassword, setShowPassword] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
-  const [showResendConfirmation, setShowResendConfirmation] = useState(false);
   const [store, setStore] = useState<Store>(initial);
   const [ready, setReady] = useState(false);
   const [playlistUrl, setPlaylistUrl] = useState("");
@@ -63,15 +62,6 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("error_code") === "otp_expired" || params.get("error") === "access_denied") {
-      setAuthMessage("That confirmation link has expired or was already used. Enter your email below and request a fresh confirmation email.");
-      setShowResendConfirmation(true);
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }, []);
-
-  useEffect(() => {
     let alive = true;
     supabase.auth.getSession().then(({data}) => {
       if (!alive) return;
@@ -93,28 +83,15 @@ export default function Home() {
     e.preventDefault(); setAuthBusy(true); setAuthMessage("");
     try {
       if (authMode === "signup") {
-        const {data,error} = await supabase.auth.signUp({email:email.trim(),password,options:{emailRedirectTo:window.location.origin}});
+        const {data,error} = await supabase.auth.signUp({email:email.trim(),password});
         if (error) throw error;
-        if (!data.session) { setAuthMessage("Account created. Check your email to confirm your address, then sign in."); setShowResendConfirmation(true); }
+        if (!data.session) setAuthMessage("Account created. Check your email to confirm your address, then sign in.");
         else setAuthMessage("Account created successfully.");
       } else {
         const {error} = await supabase.auth.signInWithPassword({email:email.trim(),password});
         if (error) throw error;
       }
     } catch (e) { setAuthMessage(e instanceof Error ? e.message : "Authentication failed."); }
-    finally { setAuthBusy(false); }
-  }
-
-  async function resendConfirmation() {
-    if (!email.trim()) { setAuthMessage("Enter your email address first."); return; }
-    setAuthBusy(true);
-    setAuthMessage("");
-    try {
-      const { error } = await supabase.auth.resend({ type: "signup", email: email.trim(), options: { emailRedirectTo: window.location.origin } });
-      if (error) throw error;
-      setAuthMessage("A fresh confirmation email has been sent. Use the newest email and open its link soon.");
-      setShowResendConfirmation(false);
-    } catch (e) { setAuthMessage(e instanceof Error ? e.message : "Could not resend the confirmation email."); }
     finally { setAuthBusy(false); }
   }
 
@@ -195,7 +172,7 @@ export default function Home() {
         <label>Email address</label><div className="auth-input"><Mail size={17}/><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" required autoComplete="email"/></div>
         <label>Password</label><div className="auth-password-wrap"><input className="auth-password" type={showPassword?"text":"password"} value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 6 characters" minLength={6} required autoComplete={authMode==="signin"?"current-password":"new-password"}/><button className="password-visibility" type="button" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?"Hide password":"Show password"} aria-pressed={showPassword}>{showPassword?<EyeOff size={18}/>:<Eye size={18}/>}</button></div>
         <button className="auth-submit" disabled={authBusy}>{authBusy?<LoaderCircle className="spin" size={17}/>:null}{authMode==="signin"?"Sign in":"Create account"}</button>
-        {authMessage&&<div className="auth-message">{authMessage}</div>}{showResendConfirmation&&<button className="auth-resend" type="button" onClick={()=>void resendConfirmation()} disabled={authBusy}>{authBusy?"Sending…":"Resend confirmation email"}</button>}
+        {authMessage&&<div className="auth-message">{authMessage}</div>}
         <div className="auth-switch">{authMode==="signin"?"New to StudyTrack?":"Already have an account?"} <button type="button" onClick={()=>{setAuthMode(authMode==="signin"?"signup":"signin");setAuthMessage("");}}>{authMode==="signin"?"Create account":"Sign in"}</button></div>
       </form>
     </main>
