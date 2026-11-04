@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { BookOpen, Check, CheckCircle2, Clock3, Flame, GraduationCap, ListFilter, Plus, Search, Target, Trash2, Youtube, Play, Circle, CalendarDays, ArrowUpDown, LoaderCircle, LogOut, Mail } from "lucide-react";
+import { BookOpen, Check, CheckCircle2, Clock3, Flame, GraduationCap, ListFilter, Plus, Search, Target, Trash2, Youtube, Play, Circle, CalendarDays, ArrowUpDown, LoaderCircle, LogOut, Mail, Eye, EyeOff } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
@@ -19,6 +19,7 @@ export default function Home() {
   const [authMode, setAuthMode] = useState<"signin"|"signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
   const [store, setStore] = useState<Store>(initial);
@@ -169,7 +170,7 @@ export default function Home() {
         <h1>{authMode==="signin"?"Welcome back":"Create your account"}</h1>
         <p>Keep your courses, lesson progress and daily goals synced across devices.</p>
         <label>Email address</label><div className="auth-input"><Mail size={17}/><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" required autoComplete="email"/></div>
-        <label>Password</label><input className="auth-password" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 6 characters" minLength={6} required autoComplete={authMode==="signin"?"current-password":"new-password"}/>
+        <label>Password</label><div className="auth-password-wrap"><input className="auth-password" type={showPassword?"text":"password"} value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 6 characters" minLength={6} required autoComplete={authMode==="signin"?"current-password":"new-password"}/><button className="password-visibility" type="button" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?"Hide password":"Show password"} aria-pressed={showPassword}>{showPassword?<EyeOff size={18}/>:<Eye size={18}/>}</button></div>
         <button className="auth-submit" disabled={authBusy}>{authBusy?<LoaderCircle className="spin" size={17}/>:null}{authMode==="signin"?"Sign in":"Create account"}</button>
         {authMessage&&<div className="auth-message">{authMessage}</div>}
         <div className="auth-switch">{authMode==="signin"?"New to StudyTrack?":"Already have an account?"} <button type="button" onClick={()=>{setAuthMode(authMode==="signin"?"signup":"signin");setAuthMessage("");}}>{authMode==="signin"?"Create account":"Sign in"}</button></div>
