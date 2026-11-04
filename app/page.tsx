@@ -33,6 +33,14 @@ export default function Home() {
 
   const loadWorkspace = useCallback(async (currentUser: User) => {
     setReady(false);
+    const [profileWrite, goalWrite] = await Promise.all([
+      supabase.from("profiles").upsert({id:currentUser.id,display_name:currentUser.user_metadata?.name || currentUser.email || "Student"},{onConflict:"id"}),
+      supabase.from("daily_goals").upsert({user_id:currentUser.id},{onConflict:"user_id",ignoreDuplicates:true})
+    ]);
+    if (profileWrite.error || goalWrite.error) {
+      setError(profileWrite.error?.message || goalWrite.error?.message || "Could not initialize your account.");
+      setReady(true); return;
+    }
     const [courseResult, goalResult, sessionResult] = await Promise.all([
       supabase.from("courses").select("id,title,playlist_id,thumbnail,added_at,lessons(id,video_id,title,duration_seconds,position,completed,completed_at)").eq("user_id", currentUser.id).order("added_at", {ascending:false}),
       supabase.from("daily_goals").select("goal_hours,goal_videos").eq("user_id", currentUser.id).maybeSingle(),
