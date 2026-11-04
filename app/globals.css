@@ -7,3 +7,33 @@
 /* Supabase account screens */
 .auth-screen{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse at 50% 0%,#24203a 0%,var(--bg) 55%)}.auth-card{width:min(100%,420px);padding:34px;background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:0 22px 70px #0005;display:flex;flex-direction:column;gap:12px}.auth-brand{display:flex;align-items:center;gap:10px;font:800 21px Manrope;margin-bottom:15px}.auth-card h1{font:800 25px Manrope;letter-spacing:-.7px;margin:0}.auth-card>p{font-size:12px;line-height:1.6;color:var(--muted);margin:0 0 8px}.auth-card>label{font-size:11px;color:#b8bbca;margin-top:5px}.auth-input{height:43px;border:1px solid #303447;border-radius:8px;display:flex;align-items:center;gap:9px;padding:0 11px;color:#85899c}.auth-password-wrap{position:relative;display:flex;align-items:center}.auth-password-wrap .auth-password{padding-right:44px}.password-visibility{position:absolute;right:9px;display:grid;place-items:center;border:0;background:transparent;color:#9da2b8;cursor:pointer;padding:6px}.password-visibility:hover{color:#d5caff}.auth-input input,.auth-password{width:100%;height:43px;background:#1b1e2b;border:1px solid #303447;border-radius:8px;color:#f3f3f8;padding:0 12px;outline:none;font:12px 'DM Sans'}.auth-input input{height:100%;border:0;background:transparent;padding:0}.auth-input:focus-within,.auth-password:focus{border-color:#9b82f2}.auth-submit{height:43px;margin-top:8px;border:0;border-radius:8px;background:#a58af7;color:#171326;font-weight:800;display:flex;justify-content:center;align-items:center;gap:8px;cursor:pointer}.auth-submit:disabled{opacity:.6}.auth-message{padding:10px;border-radius:8px;background:#24233a;color:#c7baff;font-size:11px;line-height:1.5}.auth-switch{text-align:center;color:#85899c;font-size:11px;margin-top:7px}.auth-switch button{border:0;background:none;color:#c4b5fd;font:700 11px 'DM Sans';cursor:pointer}.account-details{min-width:0;flex:1}.account-details strong{max-width:125px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.signout-button{border:0;background:transparent;color:#85899c;padding:6px;cursor:pointer}
 @media(max-width:650px){.auth-card{padding:25px 21px}}
+
+/* Collapsible workspace navigation */
+.sidebar-brand-row{display:flex;align-items:flex-start;justify-content:space-between;gap:5px}
+.sidebar-toggle{width:30px;height:30px;flex:0 0 30px;border:1px solid var(--line);border-radius:8px;background:#191b28;color:#aeb1c1;display:grid;place-items:center;cursor:pointer}
+.sidebar-toggle:hover{color:#d2c6ff;border-color:#7665ad}
+.shell .sidebar{transition:width .2s ease,padding .2s ease}
+.shell .main-area{transition:margin-left .2s ease,width .2s ease}
+.shell.sidebar-collapsed .sidebar{width:72px;padding:28px 12px}
+.shell.sidebar-collapsed .brand{padding:0 4px 46px;font-size:0}
+.shell.sidebar-collapsed .brand-mark{flex-shrink:0}
+.shell.sidebar-collapsed .sidebar-brand-row{flex-direction:column;align-items:center}
+.shell.sidebar-collapsed .sidebar-toggle{margin-top:-37px;margin-left:30px}
+.shell.sidebar-collapsed .nav-label,.shell.sidebar-collapsed .nav-item{font-size:0;justify-content:center;padding:0}
+.shell.sidebar-collapsed .nav-item svg{width:19px;height:19px}
+.shell.sidebar-collapsed .sidebar-bottom{justify-content:center;padding-left:0;padding-right:0}
+.shell.sidebar-collapsed .account-details,.shell.sidebar-collapsed .signout-button{display:none}
+.shell.sidebar-collapsed .main-area{margin-left:72px;width:calc(100% - 72px)}
+.lesson-head-actions{display:flex;align-items:center;gap:8px}
+.refresh-durations{display:flex;align-items:center;gap:6px;border:1px solid #343047;border-radius:7px;background:#201d30;color:#c4b5fd;padding:6px 9px;font:600 10px 'DM Sans';cursor:pointer;white-space:nowrap}
+.refresh-durations:disabled{opacity:.6;cursor:wait}
+@media(max-width:650px){
+ .sidebar-brand-row{align-items:center;width:100%}
+ .sidebar-toggle{margin-left:auto}
+ .shell.sidebar-collapsed .sidebar{width:100%;height:58px;padding:10px 15px}
+ .shell.sidebar-collapsed .brand{padding:0;font-size:18px}
+ .shell.sidebar-collapsed .sidebar-brand-row{flex-direction:row}
+ .shell.sidebar-collapsed .sidebar-toggle{margin:0}
+ .shell.sidebar-collapsed .main-area{margin:0;width:100%}
+ .refresh-durations{font-size:9px;padding:6px}
+}
