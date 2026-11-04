@@ -5,7 +5,7 @@ function getPlaylistId(value: string) {
   try { const url = new URL(value); return url.searchParams.get("list") || (url.hostname.includes("youtu.be") ? null : null); }
   catch { return null; }
 }
-function isoDuration(value: string) { const m = value.match(/PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?/); return m ? Number(m[1]||0)*3600 + Number(m[2]||0)*60 + Number(m[3]||0) : 0; }
+function isoDuration(value: string) { const m = value.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/); return m ? Number(m[1]||0)*3600 + Number(m[2]||0)*60 + Number(m[3]||0) : 0; }
 export async function POST(req: NextRequest) {
   const key = process.env.YOUTUBE_API_KEY;
   if (!key) return NextResponse.json({ error: "Playlist import is not configured yet. Add YOUTUBE_API_KEY to the deployment environment." }, { status: 503 });
