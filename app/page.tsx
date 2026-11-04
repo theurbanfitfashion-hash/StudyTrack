@@ -203,9 +203,9 @@ export default function Home() {
   );
 
   return (
-    <main className="shell">
+    <main className={`shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <aside className="sidebar">
-        <a className="brand" href="#"><span className="brand-mark"><GraduationCap size={22}/></span><span>studytrack</span></a>
+        <div className="sidebar-brand-row"><a className="brand" href="#"><span className="brand-mark"><GraduationCap size={22}/></span><span>studytrack</span></a><button className="sidebar-toggle" type="button" onClick={()=>setSidebarCollapsed(v=>!v)} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>{sidebarCollapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button></div>
         <div className="nav-label">WORKSPACE</div>
         <a className="nav-item active"><BookOpen size={18}/> My learning</a>
         <a className="nav-item" href="#daily-goals"><Target size={18}/> Daily goals</a>
