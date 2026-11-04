@@ -142,7 +142,7 @@ export default function Home() {
     const direction = selectedSort.direction === "asc" ? 1 : -1;
     if (selectedSort.sort === "original") items = [...items].sort((a,b) => (a.position-b.position)*direction);
     if (selectedSort.sort === "short") items = [...items].sort((a,b) => (a.duration-b.duration)*direction);
-    if (selectedSort.sort === "long") items = [...items].sort((a,b) => (a.duration-b.duration)*direction);
+    if (selectedSort.sort === "long") items = [...items].sort((a,b) => (b.duration-a.duration)*direction);
     if (selectedSort.sort === "pending") items = [...items].sort((a,b) => (Number(a.completed)-Number(b.completed))*direction);
     return items;
   }, [selected, search, selectedSort.sort, selectedSort.direction]);
